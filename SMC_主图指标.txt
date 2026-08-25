@@ -15,34 +15,51 @@ SHOW_FVG    1        0        1        1      (是否显示FVG公允价值缺口
 SHOW_EQ     1        0        1        1      (是否显示EQH/EQL流动性)
 SHOW_SW     1        0        1        1      (是否显示强弱高低点Strong/Weak)
 SHOW_PD     1        0        1        1      (是否显示折溢价均衡线EQ)
+EQ_L        3        1        30       1      (EQH/EQL等高低点确认周期, 对应Pine的Bars Confirmation)
+EQ_TS       0.1      0        0.5      0.1    (EQH/EQL阈值系数, 相对ATR200, 对应Pine的Threshold)
+OB_MIT      0        0        1        1      (OB失效判定源: 0=用最高/最低价 1=用收盘价)
 ------------------------------------------------------------------------}
 
 { 1. 基础K线绘制 (确保K线显示清晰) }
 DRAWKLINE(H, O, L, C);
 
-{ 波动率测算 ATR }
+{ 波动率测算 ATR (与 Pine 的 ta.atr(200) 口径对齐) }
 TR_VAL := MAX(MAX(HIGH - LOW, ABS(REF(CLOSE, 1) - HIGH)), ABS(REF(CLOSE, 1) - LOW));
-ATR_20 := MA(TR_VAL, 20);
+ATR_200 := MA(TR_VAL, 200);
 
 {========================================================================
  2. 波段分型与极值识别 (Swing & Internal Swings)
 ========================================================================}
 { Swing 大波段高低极值判定 }
-SWG_H_COND := REF(H, SWING_L) = HHV(H, 2 * SWING_L + 1);
-SWG_L_COND := REF(L, SWING_L) = LLV(L, 2 * SWING_L + 1);
+SWG_NEW_H := REF(H, SWING_L) > HHV(H, SWING_L);
+SWG_NEW_L := REF(L, SWING_L) < LLV(L, SWING_L);
 
-SWG_H_BAR := BARSLAST(SWG_H_COND) + SWING_L;
-SWG_L_BAR := BARSLAST(SWG_L_COND) + SWING_L;
+SWG_LAST_NH := BARSLAST(SWG_NEW_H);
+SWG_LAST_NL := BARSLAST(SWG_NEW_L);
+SWG_LEG := IF(SWG_LAST_NH < SWG_LAST_NL, 0, 1);
+
+SWG_PIV_H := SWG_LEG <> REF(SWG_LEG, 1) AND SWG_LEG = 0;
+SWG_PIV_L := SWG_LEG <> REF(SWG_LEG, 1) AND SWG_LEG = 1;
+
+SWG_H_BAR := BARSLAST(SWG_PIV_H) + SWING_L;
+SWG_L_BAR := BARSLAST(SWG_PIV_L) + SWING_L;
 
 SWG_HI := REF(H, SWG_H_BAR);
 SWG_LO := REF(L, SWG_L_BAR);
 
 { Internal 次级别波段高低极值判定 }
-INT_H_COND := REF(H, INT_L) = HHV(H, 2 * INT_L + 1);
-INT_L_COND := REF(L, INT_L) = LLV(L, 2 * INT_L + 1);
+INT_NEW_H := REF(H, INT_L) > HHV(H, INT_L);
+INT_NEW_L := REF(L, INT_L) < LLV(L, INT_L);
 
-INT_H_BAR := BARSLAST(INT_H_COND) + INT_L;
-INT_L_BAR := BARSLAST(INT_L_COND) + INT_L;
+INT_LAST_NH := BARSLAST(INT_NEW_H);
+INT_LAST_NL := BARSLAST(INT_NEW_L);
+INT_LEG := IF(INT_LAST_NH < INT_LAST_NL, 0, 1);
+
+INT_PIV_H := INT_LEG <> REF(INT_LEG, 1) AND INT_LEG = 0;
+INT_PIV_L := INT_LEG <> REF(INT_LEG, 1) AND INT_LEG = 1;
+
+INT_H_BAR := BARSLAST(INT_PIV_H) + INT_L;
+INT_L_BAR := BARSLAST(INT_PIV_L) + INT_L;
 
 INT_HI := REF(H, INT_H_BAR);
 INT_LO := REF(L, INT_L_BAR);
@@ -54,29 +71,39 @@ INT_LO := REF(L, INT_L_BAR);
 SW_CROSS_UP := CROSS(C, SWG_HI);
 SW_CROSS_DN := CROSS(SWG_LO, C);
 
-SW_LAST_UP := BARSLAST(SW_CROSS_UP);
-SW_LAST_DN := BARSLAST(SW_CROSS_DN);
+SWG_HI_CHG := SWG_H_BAR <> REF(SWG_H_BAR, 1);
+SWG_LO_CHG := SWG_L_BAR <> REF(SWG_L_BAR, 1);
+
+SW_FIRST_UP := SW_CROSS_UP AND SUM(SW_CROSS_UP, BARSLAST(SWG_HI_CHG) + 1) = 1;
+SW_FIRST_DN := SW_CROSS_DN AND SUM(SW_CROSS_DN, BARSLAST(SWG_LO_CHG) + 1) = 1;
+
+SW_LAST_UP := BARSLAST(SW_FIRST_UP);
+SW_LAST_DN := BARSLAST(SW_FIRST_DN);
 SW_TREND := IF(SW_LAST_UP < SW_LAST_DN, 1, IF(SW_LAST_DN < SW_LAST_UP, -1, 0));
 
-SW_PREV_TREND := REF(SW_TREND, 1);
-SW_BULL_CHOCH := SHOW_SWG AND SW_CROSS_UP AND SW_PREV_TREND = -1;
-SW_BULL_BOS   := SHOW_SWG AND SW_CROSS_UP AND (SW_PREV_TREND = 1 OR SW_PREV_TREND = 0);
-SW_BEAR_CHOCH := SHOW_SWG AND SW_CROSS_DN AND SW_PREV_TREND = 1;
-SW_BEAR_BOS   := SHOW_SWG AND SW_CROSS_DN AND (SW_PREV_TREND = -1 OR SW_PREV_TREND = 0);
+SW_BULL_CHOCH := SHOW_SWG AND SW_FIRST_UP AND REF(SW_TREND, 1) = -1;
+SW_BULL_BOS   := SHOW_SWG AND SW_FIRST_UP AND (REF(SW_TREND, 1) = 1 OR REF(SW_TREND, 1) = 0);
+SW_BEAR_CHOCH := SHOW_SWG AND SW_FIRST_DN AND REF(SW_TREND, 1) = 1;
+SW_BEAR_BOS   := SHOW_SWG AND SW_FIRST_DN AND (REF(SW_TREND, 1) = -1 OR REF(SW_TREND, 1) = 0);
 
 { Internal 突破与趋势状态跟踪 }
 INT_CROSS_UP := CROSS(C, INT_HI);
 INT_CROSS_DN := CROSS(INT_LO, C);
 
-INT_LAST_UP := BARSLAST(INT_CROSS_UP);
-INT_LAST_DN := BARSLAST(INT_CROSS_DN);
+INT_HI_CHG := INT_H_BAR <> REF(INT_H_BAR, 1);
+INT_LO_CHG := INT_L_BAR <> REF(INT_L_BAR, 1);
+
+INT_FIRST_UP := INT_CROSS_UP AND SUM(INT_CROSS_UP, BARSLAST(INT_HI_CHG) + 1) = 1;
+INT_FIRST_DN := INT_CROSS_DN AND SUM(INT_CROSS_DN, BARSLAST(INT_LO_CHG) + 1) = 1;
+
+INT_LAST_UP := BARSLAST(INT_FIRST_UP);
+INT_LAST_DN := BARSLAST(INT_FIRST_DN);
 INT_TREND := IF(INT_LAST_UP < INT_LAST_DN, 1, IF(INT_LAST_DN < INT_LAST_UP, -1, 0));
 
-INT_PREV_TREND := REF(INT_TREND, 1);
-INT_BULL_CHOCH := SHOW_INT AND INT_CROSS_UP AND INT_PREV_TREND = -1;
-INT_BULL_BOS   := SHOW_INT AND INT_CROSS_UP AND (INT_PREV_TREND = 1 OR INT_PREV_TREND = 0);
-INT_BEAR_CHOCH := SHOW_INT AND INT_CROSS_DN AND INT_PREV_TREND = 1;
-INT_BEAR_BOS   := SHOW_INT AND INT_CROSS_DN AND (INT_PREV_TREND = -1 OR INT_PREV_TREND = 0);
+INT_BULL_CHOCH := SHOW_INT AND INT_FIRST_UP AND INT_HI <> SWG_HI AND REF(INT_TREND, 1) = -1;
+INT_BULL_BOS   := SHOW_INT AND INT_FIRST_UP AND INT_HI <> SWG_HI AND (REF(INT_TREND, 1) = 1 OR REF(INT_TREND, 1) = 0);
+INT_BEAR_CHOCH := SHOW_INT AND INT_FIRST_DN AND INT_LO <> SWG_LO AND REF(INT_TREND, 1) = 1;
+INT_BEAR_BOS   := SHOW_INT AND INT_FIRST_DN AND INT_LO <> SWG_LO AND (REF(INT_TREND, 1) = -1 OR REF(INT_TREND, 1) = 0);
 
 { 绘制 Swing 突破与反转标注 (大字/实线) }
 DRAWTEXT(SW_BULL_CHOCH, H * 1.008, '★Swing CHoCH'), COLOR00FFFF;
@@ -91,28 +118,32 @@ DRAWTEXT(INT_BEAR_CHOCH AND NOT(SW_BEAR_CHOCH) AND NOT(SW_BEAR_BOS), L * 0.996, 
 DRAWTEXT(INT_BEAR_BOS   AND NOT(SW_BEAR_CHOCH) AND NOT(SW_BEAR_BOS), L * 0.997, 'i-BOS'),   COLOR55FF55;
 
 { 绘制结构突破水平线 }
-DRAWLINE(SW_CROSS_UP, SWG_HI, ISLASTBAR, SWG_HI, 0), COLOR0000AA, LINETHICK1;
-DRAWLINE(SW_CROSS_DN, SWG_LO, ISLASTBAR, SWG_LO, 0), COLOR00AA00, LINETHICK1;
+DRAWLINE(SW_FIRST_UP, SWG_HI, ISLASTBAR, SWG_HI, 0), COLOR0000AA, LINETHICK1;
+DRAWLINE(SW_FIRST_DN, SWG_LO, ISLASTBAR, SWG_LO, 0), COLOR00AA00, LINETHICK1;
 
 {========================================================================
  4. 订单块 (Order Blocks - OB)
 ========================================================================}
-{ 看涨订单块 (Bullish OB): 向上突破波段起涨最低点K线 }
-BULL_OB_BAR := LLVBARS(L, SWG_H_BAR);
-OB_B_TOP := REF(MAX(C, O), BULL_OB_BAR);
-OB_B_BOT := REF(L, BULL_OB_BAR);
+HI_VOL := (H - L) >= 2 * ATR_200;
+P_H := IF(HI_VOL, L, H);
+P_L := IF(HI_VOL, H, L);
 
-{ 看跌订单块 (Bearish OB): 向下跌破波段起跌最高点K线 }
-BEAR_OB_BAR := HHVBARS(H, SWG_L_BAR);
-OB_S_TOP := REF(H, BEAR_OB_BAR);
-OB_S_BOT := REF(MIN(C, O), BEAR_OB_BAR);
+{ 看涨订单块 (Bullish OB): 自最近Swing低点(pivot)至当前, 取解析后最低K线 }
+BULL_OB_BAR := LLVBARS(P_L, SWG_L_BAR);
+OB_B_TOP := REF(P_H, BULL_OB_BAR);
+OB_B_BOT := REF(P_L, BULL_OB_BAR);
+
+{ 看跌订单块 (Bearish OB): 自最近Swing高点(pivot)至当前, 取解析后最高K线 }
+BEAR_OB_BAR := HHVBARS(P_H, SWG_H_BAR);
+OB_S_TOP := REF(P_H, BEAR_OB_BAR);
+OB_S_BOT := REF(P_L, BEAR_OB_BAR);
 
 { 记录最近订单块周期 }
-LAST_BULL_OB := BARSLAST(SW_CROSS_UP OR INT_CROSS_UP);
-LAST_BEAR_OB := BARSLAST(SW_CROSS_DN OR INT_CROSS_DN);
+LAST_BULL_OB := BARSLAST(SW_FIRST_UP OR INT_FIRST_UP);
+LAST_BEAR_OB := BARSLAST(SW_FIRST_DN OR INT_FIRST_DN);
 
-BULL_OB_ACTIVE := SHOW_OB AND LAST_BULL_OB < 60 AND LLV(L, LAST_BULL_OB + 1) >= REF(OB_B_BOT, LAST_BULL_OB);
-BEAR_OB_ACTIVE := SHOW_OB AND LAST_BEAR_OB < 60 AND HHV(H, LAST_BEAR_OB + 1) <= REF(OB_S_TOP, LAST_BEAR_OB);
+BULL_OB_ACTIVE := SHOW_OB AND IF(OB_MIT = 0, LLV(L, LAST_BULL_OB + 1) >= REF(OB_B_BOT, LAST_BULL_OB), LLV(C, LAST_BULL_OB + 1) >= REF(OB_B_BOT, LAST_BULL_OB));
+BEAR_OB_ACTIVE := SHOW_OB AND IF(OB_MIT = 0, HHV(H, LAST_BEAR_OB + 1) <= REF(OB_S_TOP, LAST_BEAR_OB), HHV(C, LAST_BEAR_OB + 1) <= REF(OB_S_TOP, LAST_BEAR_OB));
 
 { 绘制订单块区间带 (Bullish OB 浅青/蓝底，Bearish OB 浅粉/红底) }
 STICKLINE(BULL_OB_ACTIVE, REF(OB_B_BOT, LAST_BULL_OB), REF(OB_B_TOP, LAST_BULL_OB), 2, 0), COLOR773300;
@@ -135,11 +166,27 @@ DRAWTEXT(FVG_BEAR, H, 'FVG-'), COLOR7F7FFF;
 {========================================================================
  6. 等高点与等低点 (Equal Highs & Lows - EQH / EQL 流动性池)
 ========================================================================}
-PREV_SWG_HI := REF(SWG_HI, SWG_H_BAR + 1);
-PREV_SWG_LO := REF(SWG_LO, SWG_L_BAR + 1);
+EQ_NEW_H := REF(H, EQ_L) > HHV(H, EQ_L);
+EQ_NEW_L := REF(L, EQ_L) < LLV(L, EQ_L);
 
-IS_EQH := SHOW_EQ AND SWG_H_COND AND ABS(REF(H, SWING_L) - PREV_SWG_HI) < 0.20 * ATR_20;
-IS_EQL := SHOW_EQ AND SWG_L_COND AND ABS(REF(L, SWING_L) - PREV_SWG_LO) < 0.20 * ATR_20;
+EQ_LAST_NH := BARSLAST(EQ_NEW_H);
+EQ_LAST_NL := BARSLAST(EQ_NEW_L);
+EQ_LEG := IF(EQ_LAST_NH < EQ_LAST_NL, 0, 1);
+
+EQ_PIV_H := EQ_LEG <> REF(EQ_LEG, 1) AND EQ_LEG = 0;
+EQ_PIV_L := EQ_LEG <> REF(EQ_LEG, 1) AND EQ_LEG = 1;
+
+EQ_H_BAR := BARSLAST(EQ_PIV_H) + EQ_L;
+EQ_L_BAR := BARSLAST(EQ_PIV_L) + EQ_L;
+
+EQ_HI := REF(H, EQ_H_BAR);
+EQ_LO := REF(L, EQ_L_BAR);
+
+PREV_EQ_HI := REF(EQ_HI, EQ_H_BAR + 1);
+PREV_EQ_LO := REF(EQ_LO, EQ_L_BAR + 1);
+
+IS_EQH := SHOW_EQ AND EQ_PIV_H AND ABS(REF(H, EQ_L) - PREV_EQ_HI) < EQ_TS * ATR_200;
+IS_EQL := SHOW_EQ AND EQ_PIV_L AND ABS(REF(L, EQ_L) - PREV_EQ_LO) < EQ_TS * ATR_200;
 
 DRAWTEXT(IS_EQH, H * 1.012, 'EQH (Liquidity)'), COLORFF33FF;
 DRAWTEXT(IS_EQL, L * 0.988, 'EQL (Liquidity)'), COLOR33FFFF;
@@ -147,16 +194,16 @@ DRAWTEXT(IS_EQL, L * 0.988, 'EQL (Liquidity)'), COLOR33FFFF;
 {========================================================================
  7. 强弱高低点 (Strong / Weak High & Low)
 ========================================================================}
-DRAWTEXT(SHOW_SW AND SWG_H_COND AND SW_TREND = -1, H * 1.018, 'Strong High'), COLOR0099FF;
-DRAWTEXT(SHOW_SW AND SWG_H_COND AND SW_TREND = 1,  H * 1.018, 'Weak High'),   COLOR888888;
-DRAWTEXT(SHOW_SW AND SWG_L_COND AND SW_TREND = 1,  L * 0.982, 'Strong Low'),  COLOR00FF99;
-DRAWTEXT(SHOW_SW AND SWG_L_COND AND SW_TREND = -1, L * 0.982, 'Weak Low'),    COLOR888888;
+DRAWTEXT(SHOW_SW AND SWG_PIV_H AND SW_TREND = -1, H * 1.018, 'Strong High'), COLOR0099FF;
+DRAWTEXT(SHOW_SW AND SWG_PIV_H AND SW_TREND = 1,  H * 1.018, 'Weak High'),   COLOR888888;
+DRAWTEXT(SHOW_SW AND SWG_PIV_L AND SW_TREND = 1,  L * 0.982, 'Strong Low'),  COLOR00FF99;
+DRAWTEXT(SHOW_SW AND SWG_PIV_L AND SW_TREND = -1, L * 0.982, 'Weak Low'),    COLOR888888;
 
 {========================================================================
  8. 折溢价与均衡位 (Premium / Discount / Equilibrium)
 ========================================================================}
-CURR_RANGE_HI := CONST(HHV(H, SWING_L * 2));
-CURR_RANGE_LO := CONST(LLV(L, SWING_L * 2));
+CURR_RANGE_HI := HHV(H, SWG_H_BAR + 1);
+CURR_RANGE_LO := LLV(L, SWG_L_BAR + 1);
 CURR_EQ       := (CURR_RANGE_HI + CURR_RANGE_LO) / 2;
 
 { 在主图绘制均衡位 50% 水平线 }
