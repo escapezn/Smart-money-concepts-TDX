@@ -1,0 +1,172 @@
+{========================================================================
+指标名称：SMC智能资金概念主图 (Smart Money Concepts)
+移植自：TradingView LuxAlgo SMC (SMC.pine)
+适用软件：通达信 (主图指标)
+========================================================================}
+
+{--- 参数设置说明 (请在通达信公式编辑器上方参数栏填入以下参数) ---
+参数名      默认值   最小值   最大值   步长
+SWING_L     50       5        200      1      (大级别Swing波段周期)
+INT_L       5        2        30       1      (次级别Internal结构周期)
+SHOW_SWG    1        0        1        1      (是否显示Swing结构 BOS/CHoCH)
+SHOW_INT    1        0        1        1      (是否显示Internal内部结构)
+SHOW_OB     1        0        1        1      (是否显示Order Block订单块)
+SHOW_FVG    1        0        1        1      (是否显示FVG公允价值缺口)
+SHOW_EQ     1        0        1        1      (是否显示EQH/EQL流动性)
+SHOW_SW     1        0        1        1      (是否显示强弱高低点Strong/Weak)
+SHOW_PD     1        0        1        1      (是否显示折溢价均衡线EQ)
+------------------------------------------------------------------------}
+
+{ 1. 基础K线绘制 (确保K线显示清晰) }
+DRAWKLINE(H, O, L, C);
+
+{ 波动率测算 ATR }
+TR_VAL := MAX(MAX(HIGH - LOW, ABS(REF(CLOSE, 1) - HIGH)), ABS(REF(CLOSE, 1) - LOW));
+ATR_20 := MA(TR_VAL, 20);
+
+{========================================================================
+ 2. 波段分型与极值识别 (Swing & Internal Swings)
+========================================================================}
+{ Swing 大波段高低极值判定 }
+SWG_H_COND := REF(H, SWING_L) = HHV(H, 2 * SWING_L + 1);
+SWG_L_COND := REF(L, SWING_L) = LLV(L, 2 * SWING_L + 1);
+
+SWG_H_BAR := BARSLAST(SWG_H_COND) + SWING_L;
+SWG_L_BAR := BARSLAST(SWG_L_COND) + SWING_L;
+
+SWG_HI := REF(H, SWG_H_BAR);
+SWG_LO := REF(L, SWG_L_BAR);
+
+{ Internal 次级别波段高低极值判定 }
+INT_H_COND := REF(H, INT_L) = HHV(H, 2 * INT_L + 1);
+INT_L_COND := REF(L, INT_L) = LLV(L, 2 * INT_L + 1);
+
+INT_H_BAR := BARSLAST(INT_H_COND) + INT_L;
+INT_L_BAR := BARSLAST(INT_L_COND) + INT_L;
+
+INT_HI := REF(H, INT_H_BAR);
+INT_LO := REF(L, INT_L_BAR);
+
+{========================================================================
+ 3. 结构突破与反转识别 (BOS & CHoCH)
+========================================================================}
+{ Swing 突破与趋势状态跟踪 }
+SW_CROSS_UP := CROSS(C, SWG_HI);
+SW_CROSS_DN := CROSS(SWG_LO, C);
+
+SW_LAST_UP := BARSLAST(SW_CROSS_UP);
+SW_LAST_DN := BARSLAST(SW_CROSS_DN);
+SW_TREND := IF(SW_LAST_UP < SW_LAST_DN, 1, IF(SW_LAST_DN < SW_LAST_UP, -1, 0));
+
+SW_PREV_TREND := REF(SW_TREND, 1);
+SW_BULL_CHOCH := SHOW_SWG AND SW_CROSS_UP AND SW_PREV_TREND = -1;
+SW_BULL_BOS   := SHOW_SWG AND SW_CROSS_UP AND (SW_PREV_TREND = 1 OR SW_PREV_TREND = 0);
+SW_BEAR_CHOCH := SHOW_SWG AND SW_CROSS_DN AND SW_PREV_TREND = 1;
+SW_BEAR_BOS   := SHOW_SWG AND SW_CROSS_DN AND (SW_PREV_TREND = -1 OR SW_PREV_TREND = 0);
+
+{ Internal 突破与趋势状态跟踪 }
+INT_CROSS_UP := CROSS(C, INT_HI);
+INT_CROSS_DN := CROSS(INT_LO, C);
+
+INT_LAST_UP := BARSLAST(INT_CROSS_UP);
+INT_LAST_DN := BARSLAST(INT_CROSS_DN);
+INT_TREND := IF(INT_LAST_UP < INT_LAST_DN, 1, IF(INT_LAST_DN < INT_LAST_UP, -1, 0));
+
+INT_PREV_TREND := REF(INT_TREND, 1);
+INT_BULL_CHOCH := SHOW_INT AND INT_CROSS_UP AND INT_PREV_TREND = -1;
+INT_BULL_BOS   := SHOW_INT AND INT_CROSS_UP AND (INT_PREV_TREND = 1 OR INT_PREV_TREND = 0);
+INT_BEAR_CHOCH := SHOW_INT AND INT_CROSS_DN AND INT_PREV_TREND = 1;
+INT_BEAR_BOS   := SHOW_INT AND INT_CROSS_DN AND (INT_PREV_TREND = -1 OR INT_PREV_TREND = 0);
+
+{ 绘制 Swing 突破与反转标注 (大字/实线) }
+DRAWTEXT(SW_BULL_CHOCH, H * 1.008, '★Swing CHoCH'), COLOR00FFFF;
+DRAWTEXT(SW_BULL_BOS,   H * 1.006, '▲Swing BOS'),   COLORRED;
+DRAWTEXT(SW_BEAR_CHOCH, L * 0.992, '★Swing CHoCH'), COLORFFFF00;
+DRAWTEXT(SW_BEAR_BOS,   L * 0.994, '▼Swing BOS'),   COLORGREEN;
+
+{ 绘制 Internal 突破与反转标注 (小字) }
+DRAWTEXT(INT_BULL_CHOCH AND NOT(SW_BULL_CHOCH) AND NOT(SW_BULL_BOS), H * 1.004, 'i-CHoCH'), COLORFF88FF;
+DRAWTEXT(INT_BULL_BOS   AND NOT(SW_BULL_CHOCH) AND NOT(SW_BULL_BOS), H * 1.003, 'i-BOS'),   COLORFF5555;
+DRAWTEXT(INT_BEAR_CHOCH AND NOT(SW_BEAR_CHOCH) AND NOT(SW_BEAR_BOS), L * 0.996, 'i-CHoCH'), COLOR88FFFF;
+DRAWTEXT(INT_BEAR_BOS   AND NOT(SW_BEAR_CHOCH) AND NOT(SW_BEAR_BOS), L * 0.997, 'i-BOS'),   COLOR55FF55;
+
+{ 绘制结构突破水平线 }
+DRAWLINE(SW_CROSS_UP, SWG_HI, ISLASTBAR, SWG_HI, 0), COLOR0000AA, LINETHICK1;
+DRAWLINE(SW_CROSS_DN, SWG_LO, ISLASTBAR, SWG_LO, 0), COLOR00AA00, LINETHICK1;
+
+{========================================================================
+ 4. 订单块 (Order Blocks - OB)
+========================================================================}
+{ 看涨订单块 (Bullish OB): 向上突破波段起涨最低点K线 }
+BULL_OB_BAR := LLVBARS(L, SWG_H_BAR);
+OB_B_TOP := REF(MAX(C, O), BULL_OB_BAR);
+OB_B_BOT := REF(L, BULL_OB_BAR);
+
+{ 看跌订单块 (Bearish OB): 向下跌破波段起跌最高点K线 }
+BEAR_OB_BAR := HHVBARS(H, SWG_L_BAR);
+OB_S_TOP := REF(H, BEAR_OB_BAR);
+OB_S_BOT := REF(MIN(C, O), BEAR_OB_BAR);
+
+{ 记录最近订单块周期 }
+LAST_BULL_OB := BARSLAST(SW_CROSS_UP OR INT_CROSS_UP);
+LAST_BEAR_OB := BARSLAST(SW_CROSS_DN OR INT_CROSS_DN);
+
+BULL_OB_ACTIVE := SHOW_OB AND LAST_BULL_OB < 60 AND LLV(L, LAST_BULL_OB + 1) >= REF(OB_B_BOT, LAST_BULL_OB);
+BEAR_OB_ACTIVE := SHOW_OB AND LAST_BEAR_OB < 60 AND HHV(H, LAST_BEAR_OB + 1) <= REF(OB_S_TOP, LAST_BEAR_OB);
+
+{ 绘制订单块区间带 (Bullish OB 浅青/蓝底，Bearish OB 浅粉/红底) }
+STICKLINE(BULL_OB_ACTIVE, REF(OB_B_BOT, LAST_BULL_OB), REF(OB_B_TOP, LAST_BULL_OB), 2, 0), COLOR773300;
+STICKLINE(BEAR_OB_ACTIVE, REF(OB_S_BOT, LAST_BEAR_OB), REF(OB_S_TOP, LAST_BEAR_OB), 2, 0), COLOR002277;
+
+{========================================================================
+ 5. 公允价值缺口 (Fair Value Gaps - FVG)
+========================================================================}
+FVG_BULL := SHOW_FVG AND L > REF(H, 2) AND REF(C, 1) > REF(H, 2);
+FVG_BEAR := SHOW_FVG AND H < REF(L, 2) AND REF(C, 1) < REF(L, 2);
+
+{ 绘制 FVG 缺口方块 }
+STICKLINE(FVG_BULL, REF(H, 2), L, 3, 0), COLOR005522;
+STICKLINE(FVG_BEAR, REF(L, 2), H, 3, 0), COLOR220055;
+
+{ 标注 FVG 文本 }
+DRAWTEXT(FVG_BULL, L, 'FVG+'), COLOR00FF7F;
+DRAWTEXT(FVG_BEAR, H, 'FVG-'), COLOR7F7FFF;
+
+{========================================================================
+ 6. 等高点与等低点 (Equal Highs & Lows - EQH / EQL 流动性池)
+========================================================================}
+PREV_SWG_HI := REF(SWG_HI, SWG_H_BAR + 1);
+PREV_SWG_LO := REF(SWG_LO, SWG_L_BAR + 1);
+
+IS_EQH := SHOW_EQ AND SWG_H_COND AND ABS(REF(H, SWING_L) - PREV_SWG_HI) < 0.20 * ATR_20;
+IS_EQL := SHOW_EQ AND SWG_L_COND AND ABS(REF(L, SWING_L) - PREV_SWG_LO) < 0.20 * ATR_20;
+
+DRAWTEXT(IS_EQH, H * 1.012, 'EQH (Liquidity)'), COLORFF33FF;
+DRAWTEXT(IS_EQL, L * 0.988, 'EQL (Liquidity)'), COLOR33FFFF;
+
+{========================================================================
+ 7. 强弱高低点 (Strong / Weak High & Low)
+========================================================================}
+DRAWTEXT(SHOW_SW AND SWG_H_COND AND SW_TREND = -1, H * 1.018, 'Strong High'), COLOR0099FF;
+DRAWTEXT(SHOW_SW AND SWG_H_COND AND SW_TREND = 1,  H * 1.018, 'Weak High'),   COLOR888888;
+DRAWTEXT(SHOW_SW AND SWG_L_COND AND SW_TREND = 1,  L * 0.982, 'Strong Low'),  COLOR00FF99;
+DRAWTEXT(SHOW_SW AND SWG_L_COND AND SW_TREND = -1, L * 0.982, 'Weak Low'),    COLOR888888;
+
+{========================================================================
+ 8. 折溢价与均衡位 (Premium / Discount / Equilibrium)
+========================================================================}
+CURR_RANGE_HI := CONST(HHV(H, SWING_L * 2));
+CURR_RANGE_LO := CONST(LLV(L, SWING_L * 2));
+CURR_EQ       := (CURR_RANGE_HI + CURR_RANGE_LO) / 2;
+
+{ 在主图绘制均衡位 50% 水平线 }
+EQ_LINE: IF(SHOW_PD, CURR_EQ, DRAWNULL), DOTLINE, COLORGRAY;
+
+{ 屏幕左上角状态看板 }
+DRAWTEXT_FIX(1, 0.01, 0.02, 0, '【SMC 智能资金概念指标】'), COLORWHITE;
+DRAWTEXT_FIX(SHOW_SWG, 0.01, 0.06, 0, '● 大波段Swing趋势:'), COLORWHITE;
+DRAWTEXT_FIX(SHOW_SWG AND SW_TREND = 1,  0.11, 0.06, 0, '多头 (Bullish)'), COLORRED;
+DRAWTEXT_FIX(SHOW_SWG AND SW_TREND = -1, 0.11, 0.06, 0, '空头 (Bearish)'), COLORGREEN;
+DRAWTEXT_FIX(SHOW_INT, 0.01, 0.10, 0, '● 次级Internal趋势:'), COLORWHITE;
+DRAWTEXT_FIX(SHOW_INT AND INT_TREND = 1,  0.11, 0.10, 0, '多头 (Bullish)'), COLORFF88FF;
+DRAWTEXT_FIX(SHOW_INT AND INT_TREND = -1, 0.11, 0.10, 0, '空头 (Bearish)'), COLOR88FFFF;
