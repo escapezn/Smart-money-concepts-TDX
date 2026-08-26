@@ -20,9 +20,6 @@ EQ_TS       0.1      0        0.5      0.1    (EQH/EQL阈值系数, 相对ATR200
 OB_MIT      0        0        1        1      (OB失效判定源: 0=用最高/最低价 1=用收盘价)
 ------------------------------------------------------------------------}
 
-{ 1. 基础K线绘制 (确保K线显示清晰) }
-DRAWKLINE(H, O, L, C);
-
 { 波动率测算 ATR (与 Pine 的 ta.atr(200) 口径对齐) }
 TR_VAL := MAX(MAX(HIGH - LOW, ABS(REF(CLOSE, 1) - HIGH)), ABS(REF(CLOSE, 1) - LOW));
 ATR_200 := MA(TR_VAL, 200);
@@ -117,10 +114,6 @@ DRAWTEXT(INT_BULL_BOS   AND NOT(SW_BULL_CHOCH) AND NOT(SW_BULL_BOS), H * 1.003, 
 DRAWTEXT(INT_BEAR_CHOCH AND NOT(SW_BEAR_CHOCH) AND NOT(SW_BEAR_BOS), L * 0.996, 'i-CHoCH'), COLOR88FFFF;
 DRAWTEXT(INT_BEAR_BOS   AND NOT(SW_BEAR_CHOCH) AND NOT(SW_BEAR_BOS), L * 0.997, 'i-BOS'),   COLOR55FF55;
 
-{ 绘制结构突破水平线 }
-DRAWLINE(SW_FIRST_UP, SWG_HI, ISLASTBAR, SWG_HI, 0), COLOR0000AA, LINETHICK1;
-DRAWLINE(SW_FIRST_DN, SWG_LO, ISLASTBAR, SWG_LO, 0), COLOR00AA00, LINETHICK1;
-
 {========================================================================
  4. 订单块 (Order Blocks - OB)
 ========================================================================}
@@ -159,11 +152,11 @@ SW_BEAR_OB_ACTIVE := SHOW_OB AND IF(OB_MIT = 0, HHV(H, LAST_SW_BEAR_OB + 1) <= R
 INT_BULL_OB_ACTIVE := SHOW_OB AND IF(OB_MIT = 0, LLV(L, LAST_INT_BULL_OB + 1) >= REF(INT_OB_B_BOT, LAST_INT_BULL_OB), LLV(C, LAST_INT_BULL_OB + 1) >= REF(INT_OB_B_BOT, LAST_INT_BULL_OB));
 INT_BEAR_OB_ACTIVE := SHOW_OB AND IF(OB_MIT = 0, HHV(H, LAST_INT_BEAR_OB + 1) <= REF(INT_OB_S_TOP, LAST_INT_BEAR_OB), HHV(C, LAST_INT_BEAR_OB + 1) <= REF(INT_OB_S_TOP, LAST_INT_BEAR_OB));
 
-{ 绘制订单块区间带 (Swing OB 深色, Internal OB 浅色区分) }
-STICKLINE(SW_BULL_OB_ACTIVE, REF(SW_OB_B_BOT, LAST_SW_BULL_OB), REF(SW_OB_B_TOP, LAST_SW_BULL_OB), 2, 0), COLOR773300;
-STICKLINE(SW_BEAR_OB_ACTIVE, REF(SW_OB_S_BOT, LAST_SW_BEAR_OB), REF(SW_OB_S_TOP, LAST_SW_BEAR_OB), 2, 0), COLOR002277;
-STICKLINE(INT_BULL_OB_ACTIVE, REF(INT_OB_B_BOT, LAST_INT_BULL_OB), REF(INT_OB_B_TOP, LAST_INT_BULL_OB), 2, 0), COLOR66AAFF;
-STICKLINE(INT_BEAR_OB_ACTIVE, REF(INT_OB_S_BOT, LAST_INT_BEAR_OB), REF(INT_OB_S_TOP, LAST_INT_BEAR_OB), 2, 0), COLORCC88FF;
+{ 绘制订单块区间带 (颜色与价格结构标志一致: 多头红系/空头绿系) }
+STICKLINE(SW_BULL_OB_ACTIVE, REF(SW_OB_B_BOT, LAST_SW_BULL_OB), REF(SW_OB_B_TOP, LAST_SW_BULL_OB), 2, 0), COLORRED;
+STICKLINE(SW_BEAR_OB_ACTIVE, REF(SW_OB_S_BOT, LAST_SW_BEAR_OB), REF(SW_OB_S_TOP, LAST_SW_BEAR_OB), 2, 0), COLORGREEN;
+STICKLINE(INT_BULL_OB_ACTIVE, REF(INT_OB_B_BOT, LAST_INT_BULL_OB), REF(INT_OB_B_TOP, LAST_INT_BULL_OB), 2, 0), COLORFF5555;
+STICKLINE(INT_BEAR_OB_ACTIVE, REF(INT_OB_S_BOT, LAST_INT_BEAR_OB), REF(INT_OB_S_TOP, LAST_INT_BEAR_OB), 2, 0), COLOR55FF55;
 
 {========================================================================
  5. 公允价值缺口 (Fair Value Gaps - FVG)
@@ -210,18 +203,27 @@ DRAWTEXT(IS_EQL, L * 0.988, 'EQL (Liquidity)'), COLOR33FFFF;
 {========================================================================
  7. 强弱高低点 (Strong / Weak High & Low)
 ========================================================================}
-DRAWTEXT(SHOW_SW AND SWG_PIV_H AND SW_TREND = -1, H * 1.018, 'Strong High'), COLOR0099FF;
-DRAWTEXT(SHOW_SW AND SWG_PIV_H AND SW_TREND = 1,  H * 1.018, 'Weak High'),   COLOR888888;
-DRAWTEXT(SHOW_SW AND SWG_PIV_L AND SW_TREND = 1,  L * 0.982, 'Strong Low'),  COLOR00FF99;
-DRAWTEXT(SHOW_SW AND SWG_PIV_L AND SW_TREND = -1, L * 0.982, 'Weak Low'),    COLOR888888;
-
-{========================================================================
- 8. 折溢价与均衡位 (Premium / Discount / Equilibrium)
-========================================================================}
+{ 与 Pine 一致: 显示当前Swing腿的trailing极值水平线并延伸至最新bar,
+  空头趋势时高点为Strong High/低点为Weak Low, 多头趋势时相反 }
 CURR_RANGE_HI := HHV(H, SWG_H_BAR + 1);
 CURR_RANGE_LO := LLV(L, SWG_L_BAR + 1);
 CURR_EQ       := (CURR_RANGE_HI + CURR_RANGE_LO) / 2;
 
+{ 当前腿极值水平线 (起点=最近极值bar, 终点=最新bar) }
+DRAWLINE(SHOW_SW AND SW_TREND = -1 AND H = CURR_RANGE_HI, CURR_RANGE_HI, SHOW_SW AND ISLASTBAR AND SW_TREND = -1, CURR_RANGE_HI, 0), COLOR0099FF, LINETHICK1;
+DRAWLINE(SHOW_SW AND SW_TREND = 1 AND H = CURR_RANGE_HI,  CURR_RANGE_HI, SHOW_SW AND ISLASTBAR AND SW_TREND = 1,  CURR_RANGE_HI, 0), COLOR888888, LINETHICK1;
+DRAWLINE(SHOW_SW AND SW_TREND = 1 AND L = CURR_RANGE_LO,  CURR_RANGE_LO, SHOW_SW AND ISLASTBAR AND SW_TREND = 1,  CURR_RANGE_LO, 0), COLOR00FF99, LINETHICK1;
+DRAWLINE(SHOW_SW AND SW_TREND = -1 AND L = CURR_RANGE_LO, CURR_RANGE_LO, SHOW_SW AND ISLASTBAR AND SW_TREND = -1, CURR_RANGE_LO, 0), COLOR888888, LINETHICK1;
+
+{ 最新bar上标注文字 }
+DRAWTEXT(SHOW_SW AND ISLASTBAR AND SW_TREND = -1, CURR_RANGE_HI * 1.002, 'Strong High'), COLOR0099FF;
+DRAWTEXT(SHOW_SW AND ISLASTBAR AND SW_TREND = 1,  CURR_RANGE_HI * 1.002, 'Weak High'),   COLOR888888;
+DRAWTEXT(SHOW_SW AND ISLASTBAR AND SW_TREND = 1,  CURR_RANGE_LO * 0.998, 'Strong Low'),  COLOR00FF99;
+DRAWTEXT(SHOW_SW AND ISLASTBAR AND SW_TREND = -1, CURR_RANGE_LO * 0.998, 'Weak Low'),    COLOR888888;
+
+{========================================================================
+ 8. 折溢价与均衡位 (Premium / Discount / Equilibrium)
+========================================================================}
 { 在主图绘制均衡位 50% 水平线 }
 EQ_LINE: IF(SHOW_PD, CURR_EQ, DRAWNULL), DOTLINE, COLORGRAY;
 
