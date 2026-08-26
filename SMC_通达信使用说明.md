@@ -27,9 +27,10 @@
 
 4. **等高点/等低点流动性 (EQH / EQL - Liquidity Pools)**
    - 识别密集双顶（EQH）与双底（EQL），此区域通常聚集大量止损单（Liquidity Pool），是机构假突破扫损（Stop Hunt）的高发地。
+   - 与 TradingView 一致：EQH/EQL 文字标注在分型 K 线位置（不再延迟出现）。
 
 5. **强弱高低点 (Strong / Weak High & Low)**
-   - 与 Pine 一致：以当前 Swing 腿的极值绘制水平线并延伸至最新 K 线，右侧标注文字。
+   - 与 Pine 一致：以当前 Swing 腿的极值绘制水平点线（只画价位，不连接历史 K 线），最新 K 线旁标注文字。
    - 多头趋势中：波段低点为 **Strong Low**（强支撑，跌破即反转），波段高点为 **Weak High**（弱阻力，易被顺势突破）。
    - 空头趋势中：波段高点为 **Strong High**（强阻力），波段低点为 **Weak Low**（弱支撑）。
 
