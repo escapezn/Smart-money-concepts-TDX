@@ -11,7 +11,7 @@ INT_L       5        2        30       1      (次级别Internal结构周期)
 SHOW_SWG    1        0        1        1      (是否显示Swing结构 BOS/CHoCH)
 SHOW_INT    1        0        1        1      (是否显示Internal内部结构)
 SHOW_OB     1        0        1        1      (是否显示Order Block订单块)
-SHOW_FVG    1        0        1        1      (是否显示FVG公允价值缺口)
+SHOW_FVG    0        0        1        1      (是否显示FVG公允价值缺口)
 SHOW_EQ     1        0        1        1      (是否显示EQH/EQL流动性)
 SHOW_SW     1        0        1        1      (是否显示强弱高低点Strong/Weak)
 SHOW_PD     1        0        1        1      (是否显示折溢价均衡线EQ)
@@ -171,12 +171,12 @@ FVG_BULL := SHOW_FVG AND L > REF(H, 2) AND REF(C, 1) > REF(H, 2);
 FVG_BEAR := SHOW_FVG AND H < REF(L, 2) AND REF(C, 1) < REF(L, 2);
 
 { 绘制 FVG 缺口方块 }
-STICKLINE(FVG_BULL, REF(H, 2), L, 3, 0), COLOR005522;
-STICKLINE(FVG_BEAR, REF(L, 2), H, 3, 0), COLOR220055;
+STICKLINE(FVG_BULL, REF(H, 2), L, 3, 0), COLORFDB8C0;
+STICKLINE(FVG_BEAR, REF(L, 2), H, 3, 0), COLORACF2BD;
 
 { 标注 FVG 文本 }
-DRAWTEXT(FVG_BULL, L * 0.995, 'FVG+'), COLOR00FF7F;
-DRAWTEXT(FVG_BEAR, H * 1.005, 'FVG-'), COLOR7F7FFF;
+DRAWTEXT(FVG_BULL, L * 0.995, 'FVG+'), COLOR7F7FFF;
+DRAWTEXT(FVG_BEAR, H * 1.005, 'FVG-'), COLOR00FF7F;
 
 {========================================================================
  6. 等高点与等低点 (Equal Highs & Lows - EQH / EQL 流动性池)
