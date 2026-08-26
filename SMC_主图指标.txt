@@ -12,6 +12,8 @@ SHOW_SWG    1        0        1        1      (是否显示Swing结构 BOS/CHoCH
 SHOW_INT    1        0        1        1      (是否显示Internal内部结构)
 SHOW_OB     1        0        1        1      (是否显示Order Block订单块)
 SHOW_FVG    0        0        1        1      (是否显示FVG公允价值缺口)
+FVG_AT      1        0        1        1      (FVG自动阈值过滤, 对应Pine的Auto Threshold)
+FVG_TF      0        0        1440     1      (FVG计算周期分钟数, 0=当前周期, 对应Pine的Timeframe)
 SHOW_EQ     1        0        1        1      (是否显示EQH/EQL流动性)
 SHOW_SW     1        0        1        1      (是否显示强弱高低点Strong/Weak)
 SHOW_PD     1        0        1        1      (是否显示折溢价均衡线EQ)
@@ -167,16 +169,43 @@ STICKLINE(INT_BEAR_OB_ACTIVE, REF(INT_OB_S_BOT, LAST_INT_BEAR_OB), REF(INT_OB_S_
 {========================================================================
  5. 公允价值缺口 (Fair Value Gaps - FVG)
 ========================================================================}
-FVG_BULL := SHOW_FVG AND L > REF(H, 2) AND REF(C, 1) > REF(H, 2);
-FVG_BEAR := SHOW_FVG AND H < REF(L, 2) AND REF(C, 1) < REF(L, 2);
+{ 目标周期分桶: FVG_TF=0 表示当前周期; 用日期+日内分钟数生成单调递增的周期编号 }
+FVG_MINS := IF(TIME >= 10000, FLOOR(TIME / 10000) * 60 + FLOOR(MOD(TIME, 10000) / 100), FLOOR(TIME / 100) * 60 + MOD(TIME, 100));
+FVG_BK := IF(FVG_TF > 0, DATE * (FLOOR(1440 / MAX(FVG_TF, 1)) + 1) + FLOOR(FVG_MINS / MAX(FVG_TF, 1)), 0);
+FVG_T_NEW := IF(BARPOS = 1, 1, IF(FVG_TF > 0, FVG_BK <> REF(FVG_BK, 1), 1));
+
+{ 当前周期桶的运行高低开 (对应Pine当前未完成HTF bar的lookahead数据) }
+FVG_D := BARSLAST(FVG_T_NEW);
+FVG_RUN_H := HHV(H, FVG_D + 1);
+FVG_RUN_L := LLV(L, FVG_D + 1);
+FVG_RUN_O := REF(O, FVG_D);
+
+{ 前一个已完成周期桶 (对应Pine的 close[1]/open[1]/high[1]/low[1]) }
+FVG_P1_H := REF(FVG_RUN_H, FVG_D + 1);
+FVG_P1_L := REF(FVG_RUN_L, FVG_D + 1);
+FVG_P1_O := REF(FVG_RUN_O, FVG_D + 1);
+FVG_P1_C := REF(C, FVG_D + 1);
+
+{ 前前个已完成周期桶 (对应Pine的 high[2]/low[2]) }
+FVG_P2_H := REF(FVG_P1_H, FVG_D + 1);
+FVG_P2_L := REF(FVG_P1_L, FVG_D + 1);
+
+{ 中间K线/周期桶实体幅度 + Auto Threshold (对应Pine的 barDeltaPercent / cum / bar_index*2) }
+FVG_DELTA := IF(BARPOS > 2 AND FVG_P1_O > 0, (FVG_P1_C - FVG_P1_O) / (FVG_P1_O * 100), 0);
+FVG_CUM := SUM(IF(FVG_T_NEW, ABS(FVG_DELTA), 0), BARPOS);
+FVG_THR := IF(BARPOS > 2, FVG_CUM / (BARPOS - 1) * 2, 0);
+FVG_MIN := IF(FVG_AT = 1, FVG_THR, 0);
+
+FVG_BULL := SHOW_FVG AND BARPOS > 5 AND FVG_T_NEW AND FVG_RUN_L > FVG_P2_H AND FVG_P1_C > FVG_P2_H AND FVG_DELTA > FVG_MIN;
+FVG_BEAR := SHOW_FVG AND BARPOS > 5 AND FVG_T_NEW AND FVG_RUN_H < FVG_P2_L AND FVG_P1_C < FVG_P2_L AND -FVG_DELTA > FVG_MIN;
 
 { 绘制 FVG 缺口方块 }
-STICKLINE(FVG_BULL, REF(H, 2), L, 3, 0), COLORFDB8C0;
-STICKLINE(FVG_BEAR, REF(L, 2), H, 3, 0), COLORACF2BD;
+STICKLINE(FVG_BULL, FVG_P2_H, FVG_RUN_L, 3, 0), COLORFDB8C0;
+STICKLINE(FVG_BEAR, FVG_P2_L, FVG_RUN_H, 3, 0), COLORACF2BD;
 
 { 标注 FVG 文本 }
-DRAWTEXT(FVG_BULL, L * 0.995, 'FVG+'), COLOR7F7FFF;
-DRAWTEXT(FVG_BEAR, H * 1.005, 'FVG-'), COLOR00FF7F;
+DRAWTEXT(FVG_BULL, FVG_RUN_L * 0.995, 'FVG+'), COLOR7F7FFF;
+DRAWTEXT(FVG_BEAR, FVG_RUN_H * 1.005, 'FVG-'), COLOR00FF7F;
 
 {========================================================================
  6. 等高点与等低点 (Equal Highs & Lows - EQH / EQL 流动性池)
