@@ -211,23 +211,34 @@ EQ_LEG := IF(EQ_LAST_NH < EQ_LAST_NL, 0, 1);
 EQ_PIV_H := EQ_LEG <> REF(EQ_LEG, 1) AND EQ_LEG = 0;
 EQ_PIV_L := EQ_LEG <> REF(EQ_LEG, 1) AND EQ_LEG = 1;
 
-EQ_H_BAR := BARSLAST(EQ_PIV_H) + EQ_L;
-EQ_L_BAR := BARSLAST(EQ_PIV_L) + EQ_L;
+{ 当前分型极值与上一个分型极值的精确取值 (对齐 Pine equalHigh / equalLow 结构体) }
+CURR_EQ_HI := REF(H, EQ_L);
+CURR_EQ_LO := REF(L, EQ_L);
+PREV_EQ_HI := REF(VALUEWHEN(EQ_PIV_H, CURR_EQ_HI), 1);
+PREV_EQ_LO := REF(VALUEWHEN(EQ_PIV_L, CURR_EQ_LO), 1);
 
-EQ_HI := REF(H, EQ_H_BAR);
-EQ_LO := REF(L, EQ_L_BAR);
+{ 上一个分型确认点距离当前确认点的周期跨度 }
+PREV_PIV_H_DIST := REF(BARSLAST(EQ_PIV_H), 1) + 1;
+PREV_PIV_L_DIST := REF(BARSLAST(EQ_PIV_L), 1) + 1;
 
-PREV_EQ_HI := REF(EQ_HI, EQ_H_BAR + 1);
-PREV_EQ_LO := REF(EQ_LO, EQ_L_BAR + 1);
+{ 等高点/等低点判定 (与 Pine 的 Threshold * ATR 对齐) }
+IS_EQH := SHOW_EQ AND EQ_PIV_H AND ABS(CURR_EQ_HI - PREV_EQ_HI) < EQ_TS * ATR_200;
+IS_EQL := SHOW_EQ AND EQ_PIV_L AND ABS(CURR_EQ_LO - PREV_EQ_LO) < EQ_TS * ATR_200;
 
-IS_EQH := SHOW_EQ AND EQ_PIV_H AND ABS(REF(H, EQ_L) - PREV_EQ_HI) < EQ_TS * ATR_200;
-IS_EQL := SHOW_EQ AND EQ_PIV_L AND ABS(REF(L, EQ_L) - PREV_EQ_LO) < EQ_TS * ATR_200;
+{ 前一分型点与当前分型点定位 (BACKSET 回填) }
+EQH_P1 := BACKSET(IS_EQH, PREV_PIV_H_DIST + EQ_L + 1) AND NOT(REF(BACKSET(IS_EQH, PREV_PIV_H_DIST + EQ_L + 1), 1));
+EQH_P2 := BACKSET(IS_EQH, EQ_L + 1) AND NOT(REF(BACKSET(IS_EQH, EQ_L + 1), 1));
 
-{ 与TradingView一致: EQH/EQL文字回填到分型K线(不再延迟), 用BACKSET定位分型bar }
-EQH_AT_PIVOT := BACKSET(IS_EQH, EQ_L + 1) AND REF(BACKSET(IS_EQH, EQ_L + 1), 1) = 0;
-EQL_AT_PIVOT := BACKSET(IS_EQL, EQ_L + 1) AND REF(BACKSET(IS_EQL, EQ_L + 1), 1) = 0;
-DRAWTEXT(EQH_AT_PIVOT, REF(H, EQ_L) * 1.016, 'EQH (Liquidity)'), COLORFF33FF;
-DRAWTEXT(EQL_AT_PIVOT, REF(L, EQ_L) * 0.984, 'EQL (Liquidity)'), COLOR33FFFF;
+EQL_P1 := BACKSET(IS_EQL, PREV_PIV_L_DIST + EQ_L + 1) AND NOT(REF(BACKSET(IS_EQL, PREV_PIV_L_DIST + EQ_L + 1), 1));
+EQL_P2 := BACKSET(IS_EQL, EQ_L + 1) AND NOT(REF(BACKSET(IS_EQL, EQ_L + 1), 1));
+
+{ 绘制两个等高/等低分型之间的水平虚线连接线 (与 TradingView 一致) }
+DRAWLINE(EQH_P1, H, EQH_P2, H, 0), COLORRED, DOTLINE;
+DRAWLINE(EQL_P1, L, EQL_P2, L, 0), COLORGREEN, DOTLINE;
+
+{ 在当前分型 K 线标注 EQH / EQL 文字 }
+DRAWTEXT(EQH_P2, H * 1.010, 'EQH'), COLORFF88FF;
+DRAWTEXT(EQL_P2, L * 0.990, 'EQL'), COLOR88FFFF;
 
 {========================================================================
  7. 强弱高低点 (Strong / Weak High & Low)
