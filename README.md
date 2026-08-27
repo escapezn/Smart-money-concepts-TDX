@@ -9,8 +9,8 @@
 1. **大级别与次级别结构 (Swing & Internal Structures)**
    - **BOS (Break of Structure 结构突破)**：顺应当前主趋势方向突破前期关键高/低点，代表趋势的延续。
    - **CHoCH (Change of Character 性质改变/反转)**：逆当前主趋势方向跌破前低或升破前高，代表潜在的趋势反转信号。
-   - **Swing 级别**（大波段，默认周期 50）：用大号文字与明显颜色标识主要市场结构。
-   - **Internal 级别**（次级别，默认周期 5）：用小号文字标识日内/次级别的微观结构突破（i-BOS, i-CHoCH）。
+   - **Swing 级别**（大波段，默认周期 50）：用明显颜色标识主要市场结构。
+   - **Internal 级别**（次级别，默认周期 5）：标识日内/次级别的微观结构突破（BOS, CHoCH）。
    - 与 TradingView 一致：每次结构突破时，从被突破的分型 K 线到突破 K 线之间绘制一条连接线（Swing 实线 / Internal 虚线）。
 
 2. **订单块 (Order Blocks - OB)**
