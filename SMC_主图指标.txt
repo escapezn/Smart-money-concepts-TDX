@@ -296,12 +296,12 @@ EQL_P1 := BACKSET(IS_EQL, PREV_PIV_L_DIST + EQ_L + 1) AND NOT(REF(BACKSET(IS_EQL
 EQL_P2 := BACKSET(IS_EQL, EQ_L + 1) AND NOT(REF(BACKSET(IS_EQL, EQ_L + 1), 1));
 
 { 绘制两个等高/等低分型之间的水平虚线连接线 (与 TradingView 一致) }
-DRAWLINE(EQH_P1, H, EQH_P2, H, 0), COLORRED, DOTLINE;
-DRAWLINE(EQL_P1, L, EQL_P2, L, 0), COLORGREEN, DOTLINE;
+DRAWLINE(EQH_P1, H, EQH_P2, H, 0), COLORGREEN, DOTLINE;
+DRAWLINE(EQL_P1, L, EQL_P2, L, 0), COLORRED, DOTLINE;
 
 { 在当前分型 K 线标注 EQH / EQL 文字 }
-DRAWTEXT(EQH_P2, H * 1.04, 'EQH'), COLORFF88FF;
-DRAWTEXT(EQL_P2, L * 0.97, 'EQL'), COLOR88FFFF;
+DRAWTEXT(EQH_P2, H * 1.04, 'EQH'), COLOR88FFFF;
+DRAWTEXT(EQL_P2, L * 0.97, 'EQL'), COLORFF88FF;
 
 {========================================================================
  7. 强弱高低点 (Strong / Weak High & Low)
